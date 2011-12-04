@@ -23,12 +23,12 @@ import ConfigParser
 import sys
 from itertools import chain
 import re
-from paramiko import RSAKey
+from ssh import RSAKey
 try:
-    from paramiko import DSAKey
+    from ssh import DSAKey
 except:
     DSAKey = None
-from paramiko import SSHConfig
+from ssh import SSHConfig
 from fabric import api
 from fabric.state import output
 
