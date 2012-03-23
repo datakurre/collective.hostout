@@ -61,11 +61,18 @@ simple to deploy your application.
 Development buildout
 --------------------
 
-For example, let's say we had the worlds simplest wsgi application ::
+For example, let's say we had the worlds simplest wsgi application.
+You can use ``paster`` to create the package. Go to ``src`` and type::
+
+    ../bin/paster create -t basic_package hellowsgi version=0.1
+        description="testing hostout" long_description="" keywords=""
+        author="" author_email="" url="" license_name="" zip_safe=False
+
+Then edit ``src/hellowsgi/hellowsgi/__init__.py`` as follow::
 
     from webob import Request, Response
 
-    def MainFactory(global_config, **local_conf):
+    def main(global_config, **local_conf):
         return MainApplication()
 
     class MainApplication(object):
@@ -76,13 +83,15 @@ For example, let's say we had the worlds simplest wsgi application ::
             response = Response("Powered by collective.hostout!")
             return response(environ, start_response)
 
-We keep this as a package in ``src/hellowsgi``.
-
-You can use ``paster`` to create the package if you need to::
-
-    ./bin/paster create -t basic_package hellowsgi version=0.1
-        description="testing hostout" long_description="" keywords=""
-        author="" author_email="" url="" license_name="" zip_safe=False
+Then edit ``src/hellowsgi/setup.py`` and update entry_points as follow::
+    
+    [...]
+    entry_points="""
+          # -*- Entry points: -*-
+          [paste.app_factory]
+          main = hellowsgi:main
+          """,
+    [...]
 
 We will create a buildout configuration file called ``base.cfg`` ::
 
@@ -109,8 +118,7 @@ We will create a buildout configuration file called ``base.cfg`` ::
         port = ${:port}
 
         [pipeline:main]
-        pipeline =
-            app
+        pipeline = app
 
         [app:app]
         use = egg:hellowsgi#main
