@@ -375,7 +375,7 @@ class HostOut:
         return self._allcmds
 
 
-    def resetenv(self):
+    def resetenv(self, buildoutuser=False):
         self.readsshconfig()
         api.env.update( self.options )
         #api.env.path = '' #HACK - path == cwd
@@ -383,10 +383,11 @@ class HostOut:
             api.env['password']=self.password
         if self.identityfile and os.path.exists(self.identityfile):
             api.env['key_filename']=self.identityfile
-        api.env.update( dict(
+        return api.settings( **dict(
                    user=self.user,
                    hosts=[self.host],
                    port=self.port,
+                   hostout=self,
                    ))
 
     def runcommand(self, cmd, *cmdargs, **vargs):
@@ -442,13 +443,13 @@ class HostOut:
         
         return res
 
-    def __getattr__(self, name):
-        """ call all the methods by this name in fabfiles """
-        if name not in self.allcmds():
-            raise AttributeError()
-        def run(*args, **vargs):
-            return self.runcommand(name, *args, **vargs)
-        return run
+#    def __getattr__(self, name):
+#        """ call all the methods by this name in fabfiles """
+#        if name not in self.allcmds():
+#            raise AttributeError()
+#        def run(*args, **vargs):
+#            return self.runcommand(name, *args, **vargs)
+#        return run
 
 
 
@@ -634,6 +635,47 @@ class Packages:
             os.remove(tsetup)
 
 
+from fabric.tasks import Task,WrappedCallableTask
+
+"""
+
+Plan is override get_hosts and use the roles as keys to the hostouts that have been read
+return a set of fake hosts which are the roles.
+Then when run is called with the fake host, reset the env to real host, path etc.
+each fake host is a key to a hostout config.
+
+"""
+class HostoutTask(WrappedCallableTask):
+    def __init__(self, func, buildoutuser=False):
+        self.func = func
+        self.buildoutuser = buildoutuser
+        WrappedCallableTask.__init__(self, func)
+ #   def get_hosts(self, arg_hosts, arg_roles, arg_exclude_hosts, env=None):
+ #       import pdb; pdb.set_trace()
+ #       return arg_roles
+    def run(self, *args, **kwargs):
+        hostout = api.env.hostouts.get(api.env.host_string)
+        with hostout.resetenv(self.buildoutuser):
+            return self.func(*args, **kwargs)
+
+def read_config(cfgfile):
+    config = ConfigParser.ConfigParser()
+    config.optionxform = str
+    config.read([cfgfile])
+    allhosts = {}
+#    buildout = Buildout(config.get('buildout','buildout'),[])
+    packages = Packages(dict(config.items('buildout')))
+    #eggs = packages.release_eggs()
+    #
+
+    for section in [s for s in config.sections() if s not in ['buildout', 'versions']]:
+        options = dict(config.items(section))
+
+        hostout = HostOut(section, options, packages, allhosts)
+        allhosts[section] = hostout
+    api.env['hostouts'] = allhosts
+
+
 def main(cfgfile, args):
     "execute the fabfile we generated"
 
@@ -644,20 +686,9 @@ def main(cfgfile, args):
     (options, args) = parser.parse_args()
     cfgfile = options.cfgfile.strip()
 
-    config = ConfigParser.ConfigParser()
-    config.optionxform = str
-    config.read([cfgfile])
-    allhosts = {}
-#    buildout = Buildout(config.get('buildout','buildout'),[])
-    packages = Packages(dict(config.items('buildout')))
-    #eggs = packages.release_eggs()
-    # 
-        
-    for section in [s for s in config.sections() if s not in ['buildout', 'versions']]:
-        options = dict(config.items(section))
+    read_config(cfgfile)
+    allhosts = api.env.hostouts
 
-        hostout = HostOut(section, options, packages, allhosts)
-        allhosts[section] = hostout
 
     # cmdline is bin/hostout host1 host2 ... cmd1 cmd2 ... arg1 arg2...
     cmds = []

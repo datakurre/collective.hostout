@@ -4,58 +4,45 @@ import os.path
 from fabric import api, contrib
 import fabric.contrib.files
 import fabric.contrib.project
-from collective.hostout.hostout import asbuildoutuser
+from collective.hostout.hostout import asbuildoutuser, HostoutTask
 from fabric.context_managers import cd
 from pkg_resources import resource_filename
 import tempfile
 
 from fabric.api import task
-from fabric.tasks import Task
 
-class PluginTask(Task):
-    def __init__(self, func, buildoutuser=False):
-        self.func = func
-        self.buildoutuser = buildoutuser
+#class BaseTask(Task):
+#
+#    def proxy_cmd(self):
+#        if api.env.hostout.http_proxy:
+#            return 'export HTTP_PROXY="http://%s" && '% api.env.hostout.http_proxy
+#        else:
+#            return ''
+#
+#
+#class Run(BaseTask):
+#    name = 'run'
+#    def run(self, *cmd):
+#        """Execute cmd on remote as login user """
+#
+#        with self.hostenv():
+#            proxy = self.proxy_cmd()
+#            if proxy:
+#                api.run("%s %s" % (proxy,' '.join(cmd)))
+#            else:
+#                api.run(' '.join(cmd))
+#instance = Run()
 
-    def run(self, *args, **kwargs):
-        if self.buildoutuser:
-            with asbuildoutuser:
-                return self.func(*args, **kwargs)
-        else:
-            return self.func(*args, **kwargs)
-
-class BaseTask(Task):
-
-    def proxy_cmd(self):
-        if api.env.hostout.http_proxy:
-            return 'export HTTP_PROXY="http://%s" && '% api.env.hostout.http_proxy
-        else:
-            return ''
-
-
-class Run(BaseTask):
-    name = 'run'
-    def run(self, *cmd):
-        """Execute cmd on remote as login user """
-
-        with self.hostenv():
-            proxy = self.proxy_cmd()
-            if proxy:
-                api.run("%s %s" % (proxy,' '.join(cmd)))
-            else:
-                api.run(' '.join(cmd))
-instance = Run()
-
-class SuDo(BaseTask):
-    name = 'sudo'
-    def sudo(*cmd):
-        """Execute cmd on remote as root user """
-        if api.env["no-sudo"]:
-            raise Exception ("Can not execute sudo command because no-sudo is set.")
-
-        with cd(api.env.path):
-            api.sudo(' '.join(cmd))
-instance = SuDo()
+#class SuDo(BaseTask):
+#    name = 'sudo'
+#    def sudo(*cmd):
+#        """Execute cmd on remote as root user """
+#        if api.env["no-sudo"]:
+#            raise Exception ("Can not execute sudo command because no-sudo is set.")
+#
+#        with cd(api.env.path):
+#            api.sudo(' '.join(cmd))
+#instance = SuDo()
 
 def runescalatable(*cmd):
     try:
@@ -89,7 +76,7 @@ def requireOwnership (file, user=None, group=None, recursive=False):
 
 
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def put(file, target=None):
     """Recursively upload specified files into the remote buildout folder"""
     if os.path.isdir(file):
@@ -111,7 +98,7 @@ def put(file, target=None):
                     target = api.env.path + '/' + target
                 api.put(file, target)
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def putrsync(dir):
     """ rsync a local buildout folder with the remote buildout """
     with asbuildoutuser():
@@ -120,7 +107,7 @@ def putrsync(dir):
 
         fabric.contrib.project.rsync_project(remote_dir=remote, local_dir = dir)
 
-@task(task_class=PluginTask, buildoutuser=True)
+@task(task_class=HostoutTask, buildoutuser=True)
 def get(file, target=None):
     """Download the specified files from the remote buildout folder"""
     if not target:
@@ -129,20 +116,21 @@ def get(file, target=None):
         file = api.env.path + '/' + file
     api.get(file, target)
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def deploy():
     "predeploy, uploadeggs, uploadbuildout, buildout and then postdeploy"
     
     
-    hostout = api.env['hostout']
-    hostout.predeploy()
-    hostout.uploadeggs()
-    hostout.uploadbuildout()
-    hostout.buildout()
-    hostout.postdeploy()
+    #hostout = api.env['hostout']
+    api.execute(predeploy)
+    api.execute(predeploy)
+    api.execute(uploadeggs)
+    api.execute(uploadbuildout)
+    api.execute(buildout)
+    api.execute(postdeploy)
 
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def predeploy():
     """Perform any initial plugin tasks. Call bootstrap if needed"""
 
@@ -164,7 +152,7 @@ def predeploy():
 
     return api.env.superfun()
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def precommands():
     "run 'pre-commands' as sudo before deployment"
     hostout = api.env['hostout']
@@ -194,7 +182,7 @@ def precommands():
 
 
 
-@task(task_class=PluginTask, buildoutuser=True)
+@task(task_class=HostoutTask, buildoutuser=True)
 def uploadeggs():
     """Release developer eggs and send to host """
     
@@ -227,7 +215,7 @@ def uploadeggs():
     api.put(tmp.name, api.env.path+'/pinned.cfg')
     tmp.close()
 
-@task(task_class=PluginTask, buildoutuser=True)
+@task(task_class=HostoutTask, buildoutuser=True)
 def uploadbuildout():
     """Upload buildout pinned version of buildouts to host """
     hostout = api.env.hostout
@@ -249,7 +237,7 @@ def uploadbuildout():
         api.run('tar -p -xvf %(tgt)s' % locals())
 #    hostout.setowners()
 
-@task(task_class=PluginTask, buildoutuser=True)
+@task(task_class=HostoutTask, buildoutuser=True)
 def buildout(*args):
     """ Run the buildout on the remote server """
 
@@ -278,7 +266,7 @@ def buildout(*args):
         # Update the var dir permissions to add group write
         api.run("find var -exec chmod g+w {} \; || true")
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def sudobuildout(*args):
     hostout = api.env.get('hostout')
     hostout.getHostoutPackage() # we need this work out releaseid
@@ -287,7 +275,7 @@ def sudobuildout(*args):
         api.sudo('bin/buildout -c %s %s' % (filename, ' '.join(args)))
     
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def postdeploy():
     """Perform any final plugin tasks """
 
@@ -307,7 +295,7 @@ def postdeploy():
             api.sudo('sh -c "%s"'%cmd)
 
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def bootstrap():
     """ Install packages and users needed to get buildout running """
     hostos = api.env.get('hostos','').lower()
@@ -342,7 +330,7 @@ def bootstrap():
     cmd()
 
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def setowners():
     """ Ensure ownership and permissions are correct on buildout and cache """
     hostout = api.env.get('hostout')
@@ -395,7 +383,7 @@ def setowners():
 #    sudo('find $(install_dir)  -name runzope -exec chown $(effectiveuser) \{\} \;')
 
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def bootstrap_users():
     """ create users if needed """
 
@@ -449,7 +437,7 @@ def bootstrap_users():
             raise Exception ("Was not able to create buildout-user ssh keys, please set buildout-password insted.")
 
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def bootstrap_buildout():
     """ Create an initialised buildout directory """
     # bootstrap assumes that correct python is already installed
@@ -525,7 +513,7 @@ def bootstrap_buildout():
 
 
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def bootstrap_buildout_ubuntu():
     
     api.sudo('apt-get update')
@@ -538,7 +526,7 @@ def bootstrap_buildout_ubuntu():
     
     api.env.hostout.bootstrap_buildout()
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def bootstrap_python_buildout():
     "Install python from source via buildout"
     
@@ -599,7 +587,7 @@ extra_options +=
     #ensure bootstrap files have correct owners
     hostout.setowners()
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def bootstrap_python(extra_args=""):
     version = api.env['python-version']
 
@@ -629,7 +617,7 @@ def bootstrap_python(extra_args=""):
 
 
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def bootstrap_python_ubuntu():
     """Update ubuntu with build tools, python and bootstrap buildout"""
     hostout = api.env.get('hostout')
@@ -686,7 +674,7 @@ def bootstrap_python_ubuntu():
 
     # python-profiler?
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def bootstrap_python_redhat():
     hostout = api.env.get('hostout')
     #Install and Update Dependencies
@@ -775,7 +763,7 @@ def bootstrap_python_redhat():
 #            'libxslt libxslt-devel ')
 
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def bootstrap_python_slackware():
     urls = [
         'http://carroll.cac.psu.edu/pub/linux/distributions/slackware/slackware-11.0/slackware/l/zlib-1.2.3-i486-1.tgz'
@@ -789,7 +777,7 @@ def bootstrap_python_slackware():
     api.env.hostout.bootstrap_python(extra_args="--with-zlib=/usr/include/zlib.h")
 
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def detecthostos():
     #http://wiki.linuxquestions.org/wiki/Find_out_which_linux_distribution_a_system_belongs_to
     # extra ; because of how fabric uses bash now
@@ -807,7 +795,7 @@ def detecthostos():
     return hostos
 
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def bootstrap_allowsudo():
     """Allow any sudo without tty"""
     hostout = api.env.get('hostout')
@@ -838,7 +826,7 @@ def bootstrap_allowsudo():
 
 
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def install_bootscript (startcmd, stopcmd, prefname=""):
     """Installs a system bootscript"""
     hostout = api.env.hostout
@@ -914,7 +902,7 @@ exit $REVAL
                 "(test -f /sbin/chkconfig && /sbin/chkconfig --add '%(name)s')") % locals() )
         
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def uninstall_bootscript (prefname=""):
     """Uninstalls a system bootscript"""
     name = "buildout-" + (prefname or hostout.name)	
@@ -924,7 +912,7 @@ def uninstall_bootscript (prefname=""):
     api.sudo ("test -f '%(path)s' && rm '%(path)s' || echo 'pass'" % locals())
 
 
-@task(task_class=PluginTask)
+@task(task_class=HostoutTask)
 def bootscript_list():
     """Lists the buildout bootscripts that are currently installed on the host"""
     api.run ("ls -l /etc/init.d/buildout-*")

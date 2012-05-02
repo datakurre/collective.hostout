@@ -321,3 +321,4 @@ def relpath(target, base=os.curdir):
     rel_list = [os.pardir] * (len(base_list)-i) + target_list[i:]
     return os.path.join(*rel_list)
 
+from hostout import read_config
