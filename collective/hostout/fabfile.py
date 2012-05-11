@@ -15,30 +15,36 @@ import tempfile
 def run(*cmd):
     """Execute cmd on remote as login user """
 
+    return _run(' '.join(cmd), run_cmd=api.run)
+
+
+def _run(*cmd, **vargs):
+    run_cmd=vargs.get('run_cmd',api.run)
+
     with cd( api.env.path):
         proxy = proxy_cmd()
         if proxy:
-            api.run("%s %s" % (proxy,' '.join(cmd)))
+            run_cmd("%s %s" % (proxy,' '.join(cmd)))
         else:
-            api.run(' '.join(cmd))
+            run_cmd(' '.join(cmd))
+
 
 def sudo(*cmd):
     """Execute cmd on remote as root user """
     if api.env["no-sudo"]:
         raise Exception ("Can not execute sudo command because no-sudo is set.")
 
-    with cd(api.env.path):
-        api.sudo(' '.join(cmd))
+    return _run(' '.join(cmd), run_cmd=api.sudo)
 
 def runescalatable(*cmd):
     try:
         with asbuildoutuser():
-            api.env.hostout.run(' '.join(cmd))
+            return _run(' '.join(cmd))
     except:
         try:
-            api.env.hostout.run(' '.join(cmd))
+            return _run(' '.join(cmd))
         except:
-            api.env.hostout.sudo(' '.join(cmd))
+            return _run(' '.join(cmd), run_cmd=api.sudo)
 
 
 def requireOwnership (file, user=None, group=None, recursive=False):
