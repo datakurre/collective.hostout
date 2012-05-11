@@ -49,6 +49,8 @@ setup(
                         'setuptools',
 #                        'Fabric>=1.0',
                         'Fabric',
+                        'setuptools_subversion',
+                        'git-svn-helpers',
 #                        'socksproxy',
 #                        'collective.eggproxy',
                         ],

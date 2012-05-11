@@ -18,12 +18,12 @@ Overview
 
 Hostout is a framework for managing remote buildouts via fabric scripts. It
 includes many helpful built-in commands to package, deploy and bootstrap a
-remote server with based on your local buildout.
+remote server based on your local buildout.
 
 Hostout is built around two ideas:
 
-1. Sharing your configuration of deployment for an application in the same
-   buildout_ you share with your developers in a team so where and how your
+1. Sharing your deployment configuration for an application in the same
+   buildout_ you share with your developers in a team, so where and how your
    applications is deployed is automated rather than documentation.
    Deployment then becomes a simple command by any member of the team.
 
@@ -37,7 +37,7 @@ the hostout's built-in ability to deploy, then skip ahead to
 You don't need to learn Fabric_ to use hostout but you will need to learn
 buildout_.  The good news is that many buildouts and snippets already exist
 for building django, pylons, pyramid, plone, zope, varnish, apache, haproxy
-or whichever server side technology you want to deploy.
+or whichever server-side technology you want to deploy.
 
 
 To Contribute
@@ -61,11 +61,18 @@ simple to deploy your application.
 Development buildout
 --------------------
 
-For example, let's say we had the worlds simplest wsgi application ::
+For example, let's say we had the worlds simplest wsgi application.
+You can use ``paster`` to create the package. Go to ``src`` and type::
+
+    ../bin/paster create -t basic_package hellowsgi version=0.1
+        description="testing hostout" long_description="" keywords=""
+        author="" author_email="" url="" license_name="" zip_safe=False
+
+Then edit ``src/hellowsgi/hellowsgi/__init__.py`` as follow::
 
     from webob import Request, Response
 
-    def MainFactory(global_config, **local_conf):
+    def main(global_config, **local_conf):
         return MainApplication()
 
     class MainApplication(object):
@@ -76,13 +83,15 @@ For example, let's say we had the worlds simplest wsgi application ::
             response = Response("Powered by collective.hostout!")
             return response(environ, start_response)
 
-We keep this is a package in ``src/hellowsgi``.
-
-You can use ``paster`` to create the package if you need to::
-
-    ./bin/paster create -t basic_package hellowsgi version=0.1
-        description="testing hostout" long_description="" keywords=""
-        author="" author_email="" url="" license_name="" zip_safe=False
+Then edit ``src/hellowsgi/setup.py`` and update entry_points as follow::
+    
+    [...]
+    entry_points="""
+          # -*- Entry points: -*-
+          [paste.app_factory]
+          main = hellowsgi:main
+          """,
+    [...]
 
 We will create a buildout configuration file called ``base.cfg`` ::
 
@@ -109,8 +118,7 @@ We will create a buildout configuration file called ``base.cfg`` ::
         port = ${:port}
 
         [pipeline:main]
-        pipeline =
-            app
+        pipeline = app
 
         [app:app]
         use = egg:hellowsgi#main
@@ -362,8 +370,8 @@ Deploy options
 
 ``pre-commands``
   A series of shell commands executed as root before the buildout is run.
-  You can use this to shut down your application. If these commands fail
-  they will be ignored.
+  You can use this to shut down your application, or to help prepare the
+  environment for buildout. If these commands fail they will be ignored.
 
 ``post-commands``
   A series of shell commands executed as root after the buildout is run. You
@@ -399,7 +407,7 @@ Users and logins
 ----------------
 
 The bootstrap_users command is called as part of the bootstrap process which
-is called if no buildout has already been bootstraped on the remote server.
+is called if no buildout has already been bootstrapped on the remote server.
 This command will login using "user" (the user should have sudo rights) and
 create two additional users and a group which joins them.
 

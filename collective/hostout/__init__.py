@@ -80,7 +80,8 @@ class Recipe:
 
         self.options['arguments']="'%s',sys.argv[1:]"%self.optionsfile
         self.options['scripts'] = 'hostout'
-        self.options['eggs'] = '\n'.join(self.options.get('eggs','').split() + ['collective.hostout'])
+        self.options['eggs'] = '\n'.join(self.options.get('eggs','').split() +
+                                         ['collective.hostout'])
 
         version = '.'.join([str(i) for i in sys.version_info])
         self.options['python-version'] = options.get('python-version', version)
