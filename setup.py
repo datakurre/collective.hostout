@@ -49,8 +49,10 @@ setup(
                         'setuptools',
 #                        'Fabric>=1.0',
                         'Fabric',
-                        'setuptools_subversion',
-                        'git-svn-helpers',
+# These need to be added to the python that buildout uses in order to build packages properly #TODO How to automate?
+#                        'setuptools_subversion',
+#                        'setuptools-git',
+
 #                        'socksproxy',
 #                        'collective.eggproxy',
                         ],

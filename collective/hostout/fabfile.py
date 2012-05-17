@@ -177,7 +177,8 @@ def uploadeggs():
     #need to send package. cycledown servers, install it, run buildout, cycle up servers
 
     dl = hostout.getDownloadCache()
-    contents = api.run('ls %s/dist' % dl).split()
+    with api.hide('running', 'stdout', 'stderr'):
+        contents = api.run('ls %s/dist' % dl).split()
 
     for pkg in hostout.localEggs():
         name = os.path.basename(pkg)

@@ -23,6 +23,7 @@ import ConfigParser
 import sys
 from itertools import chain
 import re
+import subprocess
 try:
     from ssh import SSHConfig, RSAKey
     DSAKey = None
@@ -531,13 +532,28 @@ class Packages:
         released = {}
         if self.packages:
             print "Hostout: Preparing eggs for transport"
+        cwd = os.getcwd()
         for path in self.packages:
 
             # use buildout to run setup for us
-            hash = _dir_hash([path])
-            ids[hash]=path
+            files = set([])
             path = os.path.abspath(path)
+            os.chdir(path)
             dist = find_distributions(path)
+            #from setuptools.command.sdist import sdist
+            #s = sdist(dist)
+            #sdist.get_file_list()
+            #TODO we need to use the method that sdist uses exactly
+            
+            for entrypoint in pkg_resources.iter_entry_points(group='setuptools.file_finders'):
+                plugin = entrypoint.load()
+                files = files.union(plugin(path))
+            if not files:
+                hash = _dir_hash(files, recurse=True)
+            else:
+                hash = _dir_hash(files, recurse=False)
+            ids[hash]=path
+            os.chdir(cwd)
             egg = None
             #if len(dist):
             #    dist = dist[0]
@@ -633,9 +649,13 @@ class Packages:
                 setup=setup,
                 __file__ = setup,
                 ))
-            os.spawnl(os.P_WAIT, sys.executable, zc.buildout.easy_install._safe_arg (sys.executable), tsetup,
-                      *[zc.buildout.easy_install._safe_arg(a)
-                        for a in args])
+            #os.spawnl(os.P_WAIT, sys.executable, zc.buildout.easy_install._safe_arg (sys.executable), tsetup,
+            #          *[zc.buildout.easy_install._safe_arg(a)
+            #            for a in args])
+            args = [zc.buildout.easy_install._safe_arg (sys.executable),
+                    tsetup]+ \
+                    [zc.buildout.easy_install._safe_arg(a) for a in args]
+            output = subprocess.check_output(args,stderr=subprocess.STDOUT)
         finally:
             os.close(fd)
             os.remove(tsetup)
@@ -826,10 +846,10 @@ def uuid( *args ):
 
 ignore_directories = '.svn', 'CVS', 'build', '.git'
 ignore_files = ['PKG-INFO']
-def _dir_hash(paths):
+def _dir_hash(paths, recurse=True):
     hash = md5()
     for path in paths:
-        if os.path.isdir(path):
+        if os.path.isdir(path) and recurse:
             walked = os.walk(path)
             #find_sources(path)
         else:
