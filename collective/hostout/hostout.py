@@ -655,7 +655,7 @@ class Packages:
             args = [zc.buildout.easy_install._safe_arg (sys.executable),
                     tsetup]+ \
                     [zc.buildout.easy_install._safe_arg(a) for a in args]
-            output = subprocess.check_output(args,stderr=subprocess.STDOUT)
+            output = subprocess.call(args,stderr=subprocess.STDOUT)
         finally:
             os.close(fd)
             os.remove(tsetup)

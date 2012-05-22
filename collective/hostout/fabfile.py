@@ -337,7 +337,11 @@ def setowners():
              " -exec chmod -R u+rw,g+r-w,o-rw '{}' \;" % locals())
 
     # command to set any +x file to also be +x for the group too. runzope and zopectl are examples
-    api.run("find %(path)s -perm -u+x ! -path %(var)s -exec chmod g+x '{}' \;" % dict(path=path,var=var))
+    if effective == buildout:
+        api.run("find %(path)s -perm -u+x ! -path %(var)s -exec chmod g+x '{}' \;" % dict(path=path,var=var))
+    else:
+        api.sudo("find %(path)s -perm -u+x ! -path %(var)s -exec chmod g+x '{}' \;" % dict(path=path,var=var))
+
 
     api.env.hostout.runescalatable ('mkdir -p %(var)s' % locals())
 #    api.run('mkdir -p %(var)s' % dict(var=var))
@@ -545,28 +549,30 @@ extra_options +=
     buildoutgroup = api.env['buildout-group']
 
     #hostout.setupusers()
-    api.sudo('mkdir -p %(path)s' % locals())
-    hostout.setowners()
+#    api.sudo('mkdir -p %(path)s' % locals())
+#    hostout.setowners()
 
     version = api.env['python-version']
     major = '.'.join(version.split('.')[:2])
     majorshort = major.replace('.','')
     api.sudo('mkdir -p /var/buildout-python')
     with cd('/var/buildout-python'):
-        #api.sudo('wget http://www.python.org/ftp/python/%(major)s/Python-%(major)s.tgz'%locals())
-        #api.sudo('tar xfz Python-%(major)s.tgz;cd Python-%(major)s;./configure;make;make install'%locals())
+        api.sudo('test -f collective-buildout.python.tar.gz || wget http://github.com/collective/buildout.python/tarball/master -O collective-buildout.python.tar.gz --no-check-certificate')
+        api.sudo('tar --strip-components=1 -zxvf collective-buildout.python.tar.gz')
 
-        api.sudo('svn co http://svn.plone.org/svn/collective/buildout/python/')
-        with cd('python'):
-            get_url('http://python-distribute.org/distribute_setup.py')
-            api.sudo('%s python distribute_setup.py'% proxy_cmd())
-            api.sudo('%s python bootstrap.py --distribute' % proxy_cmd())
-            fabric.contrib.files.append('buildout.cfg', BUILDOUT%locals(), use_sudo=True)
-            api.sudo('%s bin/buildout'%proxy_cmd())
-    api.env['python'] = "source /var/buildout-python/python/python-%(major)s/bin/activate; python "
-        
+        #api.sudo('svn co http://svn.plone.org/svn/collective/buildout/python/')
+        get_url('http://python-distribute.org/distribute_setup.py',  api.sudo)
+        api.sudo('%s python distribute_setup.py'% proxy_cmd())
+        api.sudo('%s python bootstrap.py --distribute' % proxy_cmd())
+        fabric.contrib.files.append('buildout.cfg', BUILDOUT%locals(), use_sudo=True)
+        api.sudo('%s bin/buildout'%proxy_cmd())
+        #api.env['python'] = "source /var/buildout-python/python/python-%(major)s/bin/activate; python "
+        api.env['python-path'] = "/var/buildout-python/python-%(major)s" %dict(major=major)
+        api.sudo('%s %s/bin/python distribute_setup.py' % (proxy_cmd(), api.env['python-path']) )
+
+
     #ensure bootstrap files have correct owners
-    hostout.setowners()
+    #hostout.setowners()
 
 def bootstrap_python(extra_args=""):
     version = api.env['python-version']
@@ -578,7 +584,10 @@ def bootstrap_python(extra_args=""):
     prefix = api.env["python-path"]
     if not prefix:
         raise "No path for python set"
-    runescalatable('mkdir -p %s' % prefix)
+    save_path = api.env.path # the pwd may not yet exist
+    api.env.path = "/"
+    with cd('/'):
+        runescalatable('mkdir -p %s' % prefix)
     #api.run("([-O %s])"%prefix)
     
     with asbuildoutuser():
@@ -594,6 +603,7 @@ def bootstrap_python(extra_args=""):
             runescalatable('make altinstall')
         api.run("rm -rf /tmp/Python-%(version)s"%d)
     api.env["system-python-use-not"] = True
+    api.env.path = save_path
 
 
 
@@ -627,19 +637,20 @@ def bootstrap_python_ubuntu():
              'libz-dev '
              'libbz2-dev '
              'libxp-dev '
-             'libreadline5 '
-             #'libreadline5-dev '
-             'libreadline-gplv2-dev '
              'libssl-dev '
              'curl '
              #'openssl '
              #'openssl-dev '
              )
+    try:
+        api.sudo('apt-get -yq install libreadline5-dev ')
+    except:
+        api.sudo('apt-get -yq install libreadline-gplv2-dev ')
 
     try:
         api.sudo('apt-get -yq install python%(major)s python%(major)s-dev '%locals())
     except:
-        hostout.bootstrap_python()
+        hostout.bootstrap_python_buildout()
 
     #api.sudo('apt-get -yq update; apt-get dist-upgrade')
 
@@ -897,9 +908,9 @@ def proxy_cmd():
     else:
         return ''
 
-def get_url(curl):
+def get_url(curl, cmd=api.run):
     proxy = api.env.hostout.socks_proxy
     if proxy:
-        api.run('curl --socks5 %s -O %s' % (proxy, curl) )
+        cmd('curl --socks5 %s -O %s' % (proxy, curl) )
     else:
-        api.run('curl -O %s' % curl)
+        cmd('curl -O %s' % curl)
