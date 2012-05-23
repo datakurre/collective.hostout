@@ -539,9 +539,34 @@ parts =
 [python-%(major)s-build:default]
 extra_options +=
     --enable-unicode=ucs4  --with-threads --with-readline --with-dbm --with-zlib --with-ssl --with-bz2
-      
+patch = %(patch_file)s
 """
-    
+
+    patch = r"""
+--- Modules/Setup.dist	2005-12-28 04:37:16.000000000 +1100
++++ Modules/Setup.dist	2012-05-23 23:31:22.000000000 +1000
+@@ -198,14 +198,14 @@
+ #_csv _csv.c
+
+ # Socket module helper for socket(2)
+-#_socket socketmodule.c
++_socket socketmodule.c
+
+ # Socket module helper for SSL support; you must comment out the other
+ # socket line above, and possibly edit the SSL variable:
+-#SSL=/usr/local/ssl
+-#_ssl _ssl.c \\
+-#	-DUSE_SSL -I$(SSL)/include -I$(SSL)/include/openssl \\
+-#	-L$(SSL)/lib -lssl -lcrypto
++SSL=/usr/lib/ssl
++_ssl _ssl.c \\
++	-DUSE_SSL -I/usr/include/openssl \\
++	-L/usr/lib/ssl -lssl -lcrypto
+
+ # The crypt module is now disabled by default because it breaks builds
+ # on many systems (where -lcrypt is needed), e.g. Linux (I believe).
+"""
+
     hostout = api.env.hostout
     hostout = api.env.get('hostout')
     buildout = api.env['buildout-user']
@@ -551,6 +576,7 @@ extra_options +=
     #hostout.setupusers()
 #    api.sudo('mkdir -p %(path)s' % locals())
 #    hostout.setowners()
+    hostos = api.env.hostout.detecthostos().lower()
 
     version = api.env['python-version']
     major = '.'.join(version.split('.')[:2])
@@ -564,6 +590,14 @@ extra_options +=
         get_url('http://python-distribute.org/distribute_setup.py',  api.sudo)
         api.sudo('%s python distribute_setup.py'% proxy_cmd())
         api.sudo('%s python bootstrap.py --distribute' % proxy_cmd())
+
+        if hostos == 'ubuntu' and major=='2.4':
+            patch_file = '${buildout:directory}/ubuntussl.patch'
+            api.sudo('rm -f ubuntussl.patch')
+            fabric.contrib.files.append('ubuntussl.patch', patch, use_sudo=True,escape=True)
+        else:
+            patch_file = ''
+
         fabric.contrib.files.append('buildout.cfg', BUILDOUT%locals(), use_sudo=True)
         api.sudo('%s bin/buildout'%proxy_cmd())
         #api.env['python'] = "source /var/buildout-python/python/python-%(major)s/bin/activate; python "
@@ -771,6 +805,8 @@ def bootstrap_python_slackware():
 def detecthostos():
     #http://wiki.linuxquestions.org/wiki/Find_out_which_linux_distribution_a_system_belongs_to
     # extra ; because of how fabric uses bash now
+    if api.env.get('hostos',None):
+        return api.env['hostos']
     hostos = api.run(
         "[ -e /etc/SuSE-release ] && echo SuSE || "
                 "[ -e /etc/redhat-release ] && echo redhat || "
@@ -779,7 +815,7 @@ def detecthostos():
                 "[ -e /etc/slackware-version ] && echo slackware"
                )
     if hostos:
-        hostos = hostos.lower().strip()
+        hostos = hostos.lower().strip().split()[0]
     print "Detected Hostos = %s" % hostos
     api.env['hostos'] = hostos
     return hostos
