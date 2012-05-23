@@ -538,7 +538,7 @@ parts =
 # ucs4 is needed as lots of eggs like lxml are also compiled with ucs4 since most linux distros compile with this      
 [python-%(major)s-build:default]
 extra_options +=
-    --enable-unicode=ucs4
+    --enable-unicode=ucs4  --with-threads --with-readline --with-dbm --with-zlib --with-ssl --with-bz2
       
 """
     
@@ -639,13 +639,15 @@ def bootstrap_python_ubuntu():
              'libxp-dev '
              'libssl-dev '
              'curl '
-             #'openssl '
-             #'openssl-dev '
+             'openssl '
+             'python-openssl '
              )
     try:
         api.sudo('apt-get -yq install libreadline5-dev ')
     except:
         api.sudo('apt-get -yq install libreadline-gplv2-dev ')
+
+    #api.sudo('apt-get -yq build-dep python%(major)s '%dict(major=major))
 
     try:
         api.sudo('apt-get -yq install python%(major)s python%(major)s-dev '%locals())
