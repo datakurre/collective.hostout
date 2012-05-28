@@ -544,12 +544,15 @@ class Packages:
             #s = sdist(dist)
             #sdist.get_file_list()
             #TODO we need to use the method that sdist uses exactly
-            
-            for entrypoint in pkg_resources.iter_entry_points(group='setuptools.file_finders'):
+            finders = list(pkg_resources.iter_entry_points(group='setuptools.file_finders'))
+            for entrypoint in finders:
                 plugin = entrypoint.load()
-                files = files.union(plugin(path))
+                found = set(plugin(path))
+                files = files.union(found)
+                print "%s found %d files to hash"%(entrypoint,len(found))
             if not files:
-                hash = _dir_hash(files, recurse=True)
+                print "Hashing using all files in %s"%path
+                hash = _dir_hash('.', recurse=True)
             else:
                 hash = _dir_hash(files, recurse=False)
             ids[hash]=path
@@ -911,6 +914,28 @@ def asbuildoutuser():
     kwargs['host_string']="%(user)s@%(host)s:%(port)s"%kwargs
 
     return api.settings (**kwargs)
+
+def assudouser():
+
+    kwargs = {"user": api.env.hostout.options['user']}
+
+
+    # Select Authentication method
+    password = api.env.hostout.options.get("password")
+    if password:
+        kwargs["password"] = password
+    else:
+        ifile = api.env.get('identity-file')
+        if ifile and os.path.exists(ifile):
+                kwargs["key_filename"] = ifile
+
+    # we need to reset the host_string
+    kwargs['host'] = api.env.hosts[0]
+    kwargs['port'] = api.env.port
+    kwargs['host_string']="%(user)s@%(host)s:%(port)s"%kwargs
+
+    return api.settings (**kwargs)
+
 
 class buildoutuser(object):
 
