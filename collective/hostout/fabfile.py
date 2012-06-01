@@ -552,8 +552,8 @@ extra_options +=
     --with-bz2
 patch = %(patch_file)s
 
-#[versions]
-#zc.buildout = 1.4.3
+[versions]
+zc.buildout = 1.4.3
 
 """
 
@@ -624,7 +624,7 @@ patch = %(patch_file)s
             patch_file = ''
 
         fabric.contrib.files.append('buildout.cfg', BUILDOUT%locals(), use_sudo=False)
-        api.run('%s bin/buildout'%proxy_cmd())
+        api.run('%s bin/buildout -N'%proxy_cmd())
         #api.env['python'] = "source /var/buildout-python/python/python-%(major)s/bin/activate; python "
         api.env['python-path'] = "/var/buildout-python/python-%(major)s" %dict(major=major)
         api.env["system-python-use-not"] = True
