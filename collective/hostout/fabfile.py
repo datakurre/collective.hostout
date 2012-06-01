@@ -628,7 +628,7 @@ zc.buildout = 1.4.3
         #api.env['python'] = "source /var/buildout-python/python/python-%(major)s/bin/activate; python "
         api.env['python-path'] = "/var/buildout-python/python-%(major)s" %dict(major=major)
         api.env["system-python-use-not"] = True
-        api.run('%s %s/bin/python distribute_setup.py' % (proxy_cmd(), api.env['python-path']) )
+        #api.run('%s %s/bin/python distribute_setup.py' % (proxy_cmd(), api.env['python-path']) )
 
 
     #ensure bootstrap files have correct owners
