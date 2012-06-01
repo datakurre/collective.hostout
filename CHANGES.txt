@@ -1,6 +1,12 @@
 Release History
 ***************
 
+1.0a6 (unreleased)
+------------------
+- now compiles python 2.4 on newer ubuntu
+- switched to using collective.buildout.python to compile python
+
+
 1.0a5 (2011-03-21)
 ------------------
 

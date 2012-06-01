@@ -167,7 +167,7 @@ class HostOut:
         self.options['user'] = self.options.get('user') or self.user or 'root'
         self.options['effective-user'] = self.options.get('effective-user') or self.user or 'root'
         self.options['buildout-user'] = self.options.get('buildout-user') or self.user or 'root'
-        self.options["no-sudo"] = self.options.get("no-sudo") or False
+        self.options["no-sudo"] = self.options.get("no-sudo",'').lower() in ['yes','true'] or False
 
         self.options["force-python-compile"] = self.options.get("system-python-use-not", self.options.get('force-python-compile', 'False'))
         self.options["force-python-compile"] = self.options["force-python-compile"] in ['True','true','yes','Yes']
@@ -244,6 +244,7 @@ class HostOut:
         
         if self.options['versionsfile']:
             versions = open(self.options['versionsfile']).read()
+            self.parseVersions(versions)
             #need to remove the dev eggs
             eggs = self.packages.getPackages()
             for line in versions.split('\n'):
@@ -256,6 +257,11 @@ class HostOut:
                     genconfig += line+'\n'
         
         return genconfig
+
+    def parseVersions(self, versions):
+        for line in versions:
+            pkg, ver = line.split('=')
+            self.versions[pkg.strip()] = ver.strip()
 
 
 

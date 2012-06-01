@@ -11,28 +11,28 @@ import tempfile
 
 
 
-@buildoutuser
 def run(*cmd):
     """Execute cmd on remote as login user """
 
-    return _run(' '.join(cmd), run_cmd=api.run)
+    with asbuildoutuser():
+        return _run(' '.join(cmd), run_cmd=api.run)
 
 
-def _run(*cmd, **vargs):
-    run_cmd=vargs.get('run_cmd',api.run)
+def _run(cmd, run_cmd=api.run):
+
+    if run_cmd == api.sudo and api.env["no-sudo"]:
+        raise Exception ("Can not execute sudo command because no-sudo is set.")
 
     with cd( api.env.path):
         proxy = proxy_cmd()
         if proxy:
-            run_cmd("%s %s" % (proxy,' '.join(cmd)))
+            run_cmd("%s %s" % (proxy,cmd))
         else:
-            run_cmd(' '.join(cmd))
+            run_cmd(cmd)
 
 
 def sudo(*cmd):
     """Execute cmd on remote as root user """
-    if api.env["no-sudo"]:
-        raise Exception ("Can not execute sudo command because no-sudo is set.")
 
     return _run(' '.join(cmd), run_cmd=api.sudo)
 
@@ -305,9 +305,13 @@ def bootstrap():
                 api.run(python + " -V")
     except:
         if api.env.get('force-python-compile'):
-            api.env.hostout.bootstrap_python()
+            api.env.hostout.bootstrap_python_buildout()
         else:
-            cmd = getattr(api.env.hostout, 'bootstrap_python_%s'%hostos, api.env.hostout.bootstrap_python)
+            try:
+                cmd = getattr(api.env.hostout, 'bootstrap_python_%s'%hostos, api.env.hostout.bootstrap_python)
+            except:
+                cmd = api.env.hostout.bootstrap_python_buildout
+
             cmd()
 
     cmd = getattr(api.env.hostout, 'bootstrap_buildout_%s'%hostos, api.env.hostout.bootstrap_buildout)
@@ -455,7 +459,7 @@ def bootstrap_buildout():
     parts = path.split('/')
     for i in range(2, len(parts)):
         try:
-            api.env.hostout.runescalatable('chmod ug+x %s' % '/'.join(parts[:i]) )
+            api.env.hostout.runescalatable('test -x %(p)s || chmod ug+x %(p)s' % dict(p='/'.join(parts[:i])) )
         except:
             print sys.stderr, "Warning: Not able to chmod ug+x on dir " + os.path.join(*parts[:i])
 
@@ -490,10 +494,11 @@ def bootstrap_buildout():
             #if api.env.get("python-path"):
             pythonpath = os.path.join (api.env.get("python-path"),'bin')
             python = "PATH=\$PATH:\"%s\"; %s" % (pythonpath, python)
+            buildout_version = api.env.hostout.versions.get('zc.buildout','1.4.3')
 
             # Bootstrap baby!
             #try:
-            api.run('%s %s bootstrap.py --distribute' % (proxy_cmd(), python) )
+            api.run('%s %s bootstrap.py --distribute -v %s' % (proxy_cmd(), python, buildout_version) )
             #except:
             #    python = os.path.join (api.env["python-prefix"], "bin/", python)
             #    api.run('%s %s bootstrap.py --distribute' % (proxy_cmd(), python) )
@@ -538,8 +543,18 @@ parts =
 # ucs4 is needed as lots of eggs like lxml are also compiled with ucs4 since most linux distros compile with this      
 [python-%(major)s-build:default]
 extra_options +=
-    --enable-unicode=ucs4  --with-threads --with-readline --with-dbm --with-zlib --with-ssl --with-bz2
+    --enable-unicode=ucs4
+    --with-threads
+    --with-readline
+    --with-dbm
+    --with-zlib
+    --with-ssl
+    --with-bz2
 patch = %(patch_file)s
+
+#[versions]
+#zc.buildout = 1.4.3
+
 """
 
     patch = r"""
@@ -576,33 +591,44 @@ patch = %(patch_file)s
     #hostout.setupusers()
 #    api.sudo('mkdir -p %(path)s' % locals())
 #    hostout.setowners()
-    hostos = api.env.hostout.detecthostos().lower()
 
     version = api.env['python-version']
     major = '.'.join(version.split('.')[:2])
     majorshort = major.replace('.','')
-    api.sudo('mkdir -p /var/buildout-python')
-    with cd('/var/buildout-python'):
-        api.sudo('test -f collective-buildout.python.tar.gz || wget http://github.com/collective/buildout.python/tarball/master -O collective-buildout.python.tar.gz --no-check-certificate')
-        api.sudo('tar --strip-components=1 -zxvf collective-buildout.python.tar.gz')
+
+    prefix = api.env["python-path"]
+    if not prefix:
+        raise "No path for python set"
+    save_path = api.env.path # the pwd may not yet exist
+    api.env.path = "/"
+    with cd('/'):
+        runescalatable('mkdir -p %s' % prefix)
+
+    with cd(prefix):
+      with asbuildoutuser():
+        hostos = api.env.hostout.detecthostos().lower()
+        api.run('test -f collective-buildout.python.tar.gz || wget http://github.com/collective/buildout.python/tarball/master -O collective-buildout.python.tar.gz --no-check-certificate')
+        api.run('tar --strip-components=1 -zxvf collective-buildout.python.tar.gz')
 
         #api.sudo('svn co http://svn.plone.org/svn/collective/buildout/python/')
-        get_url('http://python-distribute.org/distribute_setup.py',  api.sudo)
-        api.sudo('%s python distribute_setup.py'% proxy_cmd())
-        api.sudo('%s python bootstrap.py --distribute' % proxy_cmd())
+        #get_url('http://python-distribute.org/distribute_setup.py',  api.sudo)
+        #api.run('%s python distribute_setup.py'% proxy_cmd())
+        # -v due to https://github.com/collective/buildout.python/issues/11
+        api.run('%s python bootstrap.py --distribute -v 1.4.3' % proxy_cmd())
 
         if hostos == 'ubuntu' and major=='2.4':
             patch_file = '${buildout:directory}/ubuntussl.patch'
-            api.sudo('rm -f ubuntussl.patch')
-            fabric.contrib.files.append('ubuntussl.patch', patch, use_sudo=True,escape=True)
+            api.run('rm -f ubuntussl.patch')
+            fabric.contrib.files.append('ubuntussl.patch', patch, use_sudo=False,escape=True)
         else:
             patch_file = ''
 
-        fabric.contrib.files.append('buildout.cfg', BUILDOUT%locals(), use_sudo=True)
-        api.sudo('%s bin/buildout'%proxy_cmd())
+        fabric.contrib.files.append('buildout.cfg', BUILDOUT%locals(), use_sudo=False)
+        api.run('%s bin/buildout'%proxy_cmd())
         #api.env['python'] = "source /var/buildout-python/python/python-%(major)s/bin/activate; python "
         api.env['python-path'] = "/var/buildout-python/python-%(major)s" %dict(major=major)
-        api.sudo('%s %s/bin/python distribute_setup.py' % (proxy_cmd(), api.env['python-path']) )
+        api.env["system-python-use-not"] = True
+        api.run('%s %s/bin/python distribute_setup.py' % (proxy_cmd(), api.env['python-path']) )
 
 
     #ensure bootstrap files have correct owners
@@ -735,7 +761,7 @@ def bootstrap_python_redhat():
                 raise Exception (
                         "Could not determin if required pacakges were installed: "
                         + ' '.join(notInstalled))
-        hostout.bootstrap_python()
+        hostout.bootstrap_python_buildout()
 
 
 
