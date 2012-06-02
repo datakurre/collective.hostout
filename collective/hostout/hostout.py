@@ -259,9 +259,16 @@ class HostOut:
         return genconfig
 
     def parseVersions(self, versions):
-        for line in versions:
-            pkg, ver = line.split('=')
-            self.versions[pkg.strip()] = ver.strip()
+        self.versions = {}
+        for line in versions.split('\n'):
+            if '=' in line:
+                pkg, ver = line.split('=')
+                self.versions[pkg.strip()] = ver.strip()
+        self.options['versions'] = self.versions
+
+    def getVersions(self):
+        self.getHostoutFile()
+        return self.versions
 
 
 

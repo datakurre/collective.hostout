@@ -342,7 +342,8 @@ def setowners():
 
     # command to set any +x file to also be +x for the group too. runzope and zopectl are examples
     if effective == buildout:
-        api.run("find %(path)s -perm -u+x ! -path %(var)s -exec chmod g+x '{}' \;" % dict(path=path,var=var))
+        with asbuildoutuser():
+            api.run("find %(path)s -perm -u+x ! -path %(var)s -exec chmod g+x '{}' \;" % dict(path=path,var=var))
     else:
         api.sudo("find %(path)s -perm -u+x ! -path %(var)s -exec chmod g+x '{}' \;" % dict(path=path,var=var))
 
@@ -350,15 +351,16 @@ def setowners():
     api.env.hostout.runescalatable ('mkdir -p %(var)s' % locals())
 #    api.run('mkdir -p %(var)s' % dict(var=var))
 
-    try:
-        api.sudo (\
-                '[ `stat -c %%U:%%G %(var)s` = "%(effective)s:%(buildoutgroup)s" ] || ' \
-                'chown -R %(effective)s:%(buildoutgroup)s %(var)s ' % locals())
-        api.sudo ( '[ `stat -c %%A %(var)s` = "drwxrws--x" ] || chmod -R u+rw,g+wrs,o-rw %(var)s ' % locals())
-    except:
-        pass
-        #raise Exception ("Was not able to set owner and permissions on "\
-        #            "%(var)s to %(effective)s:%(buildoutgroup)s with u+rw,g+wrs,o-rw" % locals() )
+    if effective != buildout:
+        try:
+            api.sudo (\
+                    '[ `stat -c %%U:%%G %(var)s` = "%(effective)s:%(buildoutgroup)s" ] || ' \
+                    'chown -R %(effective)s:%(buildoutgroup)s %(var)s ' % locals())
+            api.sudo ( '[ `stat -c %%A %(var)s` = "drwxrws--x" ] || chmod -R u+rw,g+wrs,o-rw %(var)s ' % locals())
+        except:
+            pass
+            #raise Exception ("Was not able to set owner and permissions on "\
+            #            "%(var)s to %(effective)s:%(buildoutgroup)s with u+rw,g+wrs,o-rw" % locals() )
         
 
 #    api.sudo("chmod g+x `find %(path)s -perm -g-x` || find %(path)s -perm -g-x -exec chmod g+x '{}' \;" % locals()) #so effective can execute code
@@ -494,7 +496,8 @@ def bootstrap_buildout():
             #if api.env.get("python-path"):
             pythonpath = os.path.join (api.env.get("python-path"),'bin')
             python = "PATH=\$PATH:\"%s\"; %s" % (pythonpath, python)
-            buildout_version = api.env.hostout.versions.get('zc.buildout','1.4.3')
+            versions = api.env.hostout.getVersions()
+            buildout_version = versions.get('zc.buildout','1.4.3')
 
             # Bootstrap baby!
             #try:
