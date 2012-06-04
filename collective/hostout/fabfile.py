@@ -314,8 +314,11 @@ def bootstrap():
 
             cmd()
 
-    cmd = getattr(api.env.hostout, 'bootstrap_buildout_%s'%hostos, api.env.hostout.bootstrap_buildout)
-    cmd()
+    if api.env.get('force-python-compile'):
+        api.env.hostout.bootstrap_buildout()
+    else:
+        cmd = getattr(api.env.hostout, 'bootstrap_buildout_%s'%hostos, api.env.hostout.bootstrap_buildout)
+        cmd()
 
 
 def setowners():
@@ -555,6 +558,9 @@ extra_options +=
     --with-bz2
 patch = %(patch_file)s
 
+[install-links]
+prefix = ${buildout:directory}
+
 [versions]
 zc.buildout = 1.4.3
 
@@ -607,9 +613,10 @@ zc.buildout = 1.4.3
     with cd('/'):
         runescalatable('mkdir -p %s' % prefix)
 
-    with cd(prefix):
-      with asbuildoutuser():
-        hostos = api.env.hostout.detecthostos().lower()
+    with asbuildoutuser():
+      #TODO: bug in fabric. seems like we need to run this command first before cd will work
+      hostos = api.env.hostout.detecthostos().lower()
+      with cd(prefix):
         api.run('test -f collective-buildout.python.tar.gz || wget http://github.com/collective/buildout.python/tarball/master -O collective-buildout.python.tar.gz --no-check-certificate')
         api.run('tar --strip-components=1 -zxvf collective-buildout.python.tar.gz')
 
@@ -629,7 +636,8 @@ zc.buildout = 1.4.3
         fabric.contrib.files.append('buildout.cfg', BUILDOUT%locals(), use_sudo=False)
         api.run('%s bin/buildout -N'%proxy_cmd())
         #api.env['python'] = "source /var/buildout-python/python/python-%(major)s/bin/activate; python "
-        api.env['python-path'] = "/var/buildout-python/python-%(major)s" %dict(major=major)
+        api.run('%s bin/install-links'%proxy_cmd())
+        #api.env['python-path'] = "/var/buildout-python/python-%(major)s" %dict(major=major)
         api.env["system-python-use-not"] = True
         #api.run('%s %s/bin/python distribute_setup.py' % (proxy_cmd(), api.env['python-path']) )
 
