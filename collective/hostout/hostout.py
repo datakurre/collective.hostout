@@ -877,7 +877,11 @@ def _dir_hash(paths, recurse=True):
             hash.update(' '.join(dirnames))
             hash.update(' '.join(filenames))
             for name in filenames:
-                hash.update(open(os.path.join(dirpath, name)).read())
+                try:
+                    hash.update(open(os.path.join(dirpath, name)).read())
+                except:
+                    #TODO: sometimes .git etc says file is there. Maybe better way to handle this?
+                    pass
     import base64
     hash = base64.urlsafe_b64encode(hash.digest()).strip()
     hash = hash.replace('_','-').replace('=','')
