@@ -5,7 +5,7 @@ from fabric import api, contrib
 import fabric.contrib.files
 import fabric.contrib.project
 from collective.hostout.hostout import buildoutuser, asbuildoutuser
-from fabric.context_managers import cd
+from fabric.context_managers import cd, path
 from pkg_resources import resource_filename
 import tempfile
 
@@ -498,13 +498,18 @@ def bootstrap_buildout():
             python = 'python%s' % major
             #if api.env.get("python-path"):
             pythonpath = os.path.join (api.env.get("python-path"),'bin')
-            python = "PATH=\$PATH:\"%s\"; %s" % (pythonpath, python)
+            # try to activate virtualenv if it exists
+            #api.run("%(pythonpath)s/virtualenv-%(major)s %(path)s"%dict(pythonpath=pythonpath,major=major,path=path))
+            #python += "source /var/buildout-python/python/python-%(major)s/bin/activate; python "
+
+            #python = "PATH=\$PATH:\"%s\"; %s" % (pythonpath, python)
             versions = api.env.hostout.getVersions()
             buildout_version = versions.get('zc.buildout','1.4.3')
 
             # Bootstrap baby!
             #try:
-            api.run('%s %s bootstrap.py --distribute -v %s' % (proxy_cmd(), python, buildout_version) )
+            with fabric.context_managers.path(pythonpath,behavior='prepend'):
+                api.run('%s %s bootstrap.py --distribute -v %s' % (proxy_cmd(), python, buildout_version) )
             #except:
             #    python = os.path.join (api.env["python-prefix"], "bin/", python)
             #    api.run('%s %s bootstrap.py --distribute' % (proxy_cmd(), python) )
@@ -636,7 +641,8 @@ zc.buildout = 1.4.3
         fabric.contrib.files.append('buildout.cfg', BUILDOUT%locals(), use_sudo=False)
         api.run('%s bin/buildout -N'%proxy_cmd())
         #api.env['python'] = "source /var/buildout-python/python/python-%(major)s/bin/activate; python "
-        api.run('%s bin/install-links'%proxy_cmd())
+        #api.run('%s bin/install-links'%proxy_cmd())
+        api.run("bin/virtualenv-%(major)s ."%dict(major=major))
         #api.env['python-path'] = "/var/buildout-python/python-%(major)s" %dict(major=major)
         api.env["system-python-use-not"] = True
         #api.run('%s %s/bin/python distribute_setup.py' % (proxy_cmd(), api.env['python-path']) )
