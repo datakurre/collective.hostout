@@ -11,38 +11,31 @@ import tempfile
 
 from fabric.api import task
 
-#class BaseTask(Task):
-#
-#    def proxy_cmd(self):
-#        if api.env.hostout.http_proxy:
-#            return 'export HTTP_PROXY="http://%s" && '% api.env.hostout.http_proxy
-#        else:
-#            return ''
-#
-#
-#class Run(BaseTask):
-#    name = 'run'
-#    def run(self, *cmd):
-#        """Execute cmd on remote as login user """
-#
-#        with self.hostenv():
-#            proxy = self.proxy_cmd()
-#            if proxy:
-#                api.run("%s %s" % (proxy,' '.join(cmd)))
-#            else:
-#                api.run(' '.join(cmd))
-#instance = Run()
+def proxy_cmd():
+    if api.env.hostout.http_proxy:
+        return 'export HTTP_PROXY="http://%s" && '% api.env.hostout.http_proxy
+    else:
+        return ''
 
-#class SuDo(BaseTask):
-#    name = 'sudo'
-#    def sudo(*cmd):
-#        """Execute cmd on remote as root user """
-#        if api.env["no-sudo"]:
-#            raise Exception ("Can not execute sudo command because no-sudo is set.")
-#
-#        with cd(api.env.path):
-#            api.sudo(' '.join(cmd))
-#instance = SuDo()
+
+@task(task_class=HostoutTask, buildoutuser=True)
+def run(*cmd):
+    """Execute cmd on remote as login user """
+
+    proxy = proxy_cmd()
+    if proxy:
+        api.run("%s %s" % (proxy,' '.join(cmd)))
+    else:
+        api.run(' '.join(cmd))
+
+@task(task_class=HostoutTask)
+def sudo(*cmd):
+    """Execute cmd on remote as root user """
+    if api.env["no-sudo"]:
+        raise Exception ("Can not execute sudo command because no-sudo is set.")
+
+    with cd(api.env.path):
+        api.sudo(' '.join(cmd))
 
 def runescalatable(*cmd):
     try:

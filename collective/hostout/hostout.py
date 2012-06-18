@@ -122,6 +122,8 @@ class HostOut:
 
         self.name = name
         self.remote_dir = opt.setdefault('path', '/var/lib/plone/%s'%name)
+        if not opt.get('host'):
+            raise "No host defined"
         try:
             self.host, self.port = opt['host'].split(':')
             self.port = int(self.port)
@@ -129,7 +131,7 @@ class HostOut:
             self.host = opt.get('host')
             self.port = 22
             
-        self.user = opt.get('user')
+        self.user = opt.get('buildout-user',opt.get('user'))
         self.password = opt.get('password')
         self.identityfile = opt.get('identity-file')
         shell =  opt.get('shell')
@@ -376,7 +378,7 @@ class HostOut:
 
 
     def resetenv(self, buildoutuser=False):
-        self.readsshconfig()
+#        self.readsshconfig()
         api.env.update( self.options )
         #api.env.path = '' #HACK - path == cwd
         if self.password:
@@ -388,6 +390,9 @@ class HostOut:
                    hosts=[self.host],
                    port=self.port,
                    hostout=self,
+                   host_string="%(user)s@%(host)s:%(port)s"%dict(user=self.user,
+                                                                 host=self.host,
+                                                                 port=self.port)
                    ))
 
     def runcommand(self, cmd, *cmdargs, **vargs):
@@ -654,25 +659,33 @@ class HostoutTask(WrappedCallableTask):
  #       import pdb; pdb.set_trace()
  #       return arg_roles
     def run(self, *args, **kwargs):
+        import pdb; pdb.set_trace()
         hostout = api.env.hostouts.get(api.env.host_string)
         with hostout.resetenv(self.buildoutuser):
             return self.func(*args, **kwargs)
 
 def read_config(cfgfile):
-    config = ConfigParser.ConfigParser()
-    config.optionxform = str
-    config.read([cfgfile])
     allhosts = {}
-#    buildout = Buildout(config.get('buildout','buildout'),[])
-    packages = Packages(dict(config.items('buildout')))
-    #eggs = packages.release_eggs()
-    #
+    if type(cfgfile) == type(dict()):
+        packages = Packages(cfgfile)
+        for section,options in cfgfile.get('hostouts').items():
+            hostout = HostOut(section, options, packages, allhosts)
+            allhosts[section] = hostout
+    else:
+        config = ConfigParser.ConfigParser()
+        config.optionxform = str
+        config.read([cfgfile])
+    #    buildout = Buildout(config.get('buildout','buildout'),[])
+        packages = Packages(dict(config.items('buildout')))
+        #eggs = packages.release_eggs()
+        #
 
-    for section in [s for s in config.sections() if s not in ['buildout', 'versions']]:
-        options = dict(config.items(section))
+        for section in [s for s in config.sections() if s not in ['buildout', 'versions']]:
+            options = dict(config.items(section))
 
-        hostout = HostOut(section, options, packages, allhosts)
-        allhosts[section] = hostout
+            hostout = HostOut(section, options, packages, allhosts)
+            allhosts[section] = hostout
+
     api.env['hostouts'] = allhosts
 
 
