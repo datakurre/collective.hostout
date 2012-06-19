@@ -598,6 +598,7 @@ zc.buildout = 1.4.3
 
     hostout = api.env.hostout
     hostout = api.env.get('hostout')
+    sudouser = api.env.get('user')
     buildout = api.env['buildout-user']
     effective = api.env['effective-user']
     buildoutgroup = api.env['buildout-group']
@@ -616,7 +617,14 @@ zc.buildout = 1.4.3
     save_path = api.env.path # the pwd may not yet exist
     api.env.path = "/"
     with cd('/'):
-        runescalatable('mkdir -p %s' % prefix)
+        if buildout != sudouser:
+            sudo('mkdir -p %s' % prefix)
+            sudo('chown %s:%s %s'%(buildout,buildoutgroup,prefix))
+        else:
+            run('mkdir -p %s' % prefix)
+            run('chown %s:%s %s'%(buildout,buildoutgroup,prefix))
+
+
 
     with asbuildoutuser():
       #TODO: bug in fabric. seems like we need to run this command first before cd will work
