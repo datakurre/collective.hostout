@@ -16,6 +16,6 @@ read_config(dict(
 
 from fabric.api import task, run
 
-@task
-def mytask():
-  pass
+#@task
+#def mytask():
+#  pass

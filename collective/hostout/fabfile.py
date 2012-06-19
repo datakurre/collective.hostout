@@ -11,6 +11,10 @@ import tempfile
 
 from fabric.api import task
 
+
+# do this on import so user fabfile is forced into new tasks
+api.env.new_style_tasks = True
+
 def proxy_cmd():
     if api.env.hostout.http_proxy:
         return 'export HTTP_PROXY="http://%s" && '% api.env.hostout.http_proxy

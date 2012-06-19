@@ -122,13 +122,14 @@ class HostOut:
 
         self.name = name
         self.remote_dir = opt.setdefault('path', '/var/lib/plone/%s'%name)
-        if not opt.get('host'):
-            raise "No host defined"
+        if not opt.get('hostname'):
+            self.host = name
+            self.port = 22
         try:
-            self.host, self.port = opt['host'].split(':')
+            self.host, self.port = opt['hostname'].split(':')
             self.port = int(self.port)
         except:
-            self.host = opt.get('host')
+            self.host = opt.get('hostname')
             self.port = 22
             
         self.user = opt.get('buildout-user',opt.get('user'))
@@ -397,13 +398,12 @@ class HostOut:
 
     def runcommand(self, cmd, *cmdargs, **vargs):
         self.allcmds()
-        api.env['hostout'] = self
-        
+
         
 
-        if self.firstrun:
-            self.resetenv()
-            self.firstrun = False
+        #if self.firstrun:
+        #    self.resetenv()
+        #    self.firstrun = False
 
         # Let plugins change host or user if they want
         self.inits = [(set.get('initcommand'),fabfile) for set,fabfile in self.sets if 'initcommand' in set]
@@ -425,26 +425,28 @@ class HostOut:
             print "Hostout: Running command '%(cmd)s' from '%(fabfile)s'" % dict(cmd=cmd,
                                                                                  fabfile=fabfile)
 
-            key_filename = api.env.get('identity-file')
-            if key_filename and os.path.exists(key_filename):
-                api.env.key_filename = key_filename
+            #key_filename = api.env.get('identity-file')
+            #if key_filename and os.path.exists(key_filename):
+            #    api.env.key_filename = key_filename
 
-            if len(api.env.hosts):
-                api.env['host'] = api.env.hosts[0]
-                api.env['host_string']="%(user)s@%(host)s:%(port)s"%api.env
-            else:
-                api.env['host'] = None
-                api.env['host_string'] = None
+            #if len(api.env.hosts):
+            #    api.env['host'] = api.env.hosts[0]
+            #    api.env['host_string']="%(user)s@%(host)s:%(port)s"%api.env
+            #else:
+            #    api.env['host'] = None
+            #    api.env['host_string'] = None
                 
-            api.env.cwd = ''
+            #api.env.cwd = ''
             output.debug = True
-            res = func(*cmdargs, **vargs)
+            res = api.execute(func,*cmdargs, **vargs)
            
             return res
-        
-        callingsuper = api.env.get('superfun',None)
-        res = superfun(funcs, *cmdargs, **vargs)
-        api.env['superfun'] = callingsuper
+
+        with api.settings(hostout=self):
+            with self.resetenv():
+                callingsuper = api.env.get('superfun',None)
+                res = superfun(funcs, *cmdargs, **vargs)
+                api.env['superfun'] = callingsuper
         
         return res
 
@@ -702,6 +704,10 @@ def main(cfgfile, args):
     read_config(cfgfile)
     allhosts = api.env.hostouts
 
+    from fabric.main import extract_tasks
+    import fabfile
+    extract_tasks([('hostout',fabfile)])
+
 
     # cmdline is bin/hostout host1 host2 ... cmd1 cmd2 ... arg1 arg2...
     cmds = []
@@ -753,12 +759,14 @@ def main(cfgfile, args):
                 print >> sys.stderr, ''
     else:
         try:
+            import pdb; pdb.set_trace()
             for host, hostout in hosts:
                 for cmd in cmds:
-                    if cmd == cmds[-1]:
-                        res = hostout.runcommand(cmd, *cmdargs)
-                    else:
-                        res = hostout.runcommand(cmd)
+                    with api.settings(host=host):
+                        if cmd == cmds[-1]:
+                            res = hostout.runcommand(cmd, *cmdargs)
+                        else:
+                            res = hostout.runcommand(cmd)
             print("Return value: %s"%res)
             sys.exit(res is False)
         except SystemExit:
