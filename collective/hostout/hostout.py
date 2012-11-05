@@ -107,12 +107,13 @@ def get_all_extends(cfgfile):
 
 
 class DistributionGenerationException(Exception):
-    def __init__(self, path, args):
+    def __init__(self, path, args, dircontents):
         self.path = path
         self.args = args
+        self.dircontents = dircontents
         
     def __str__(self):
-        return  "Error releasing egg at %s: No egg found after \n python setup.py %s" % (self.path, self.args)
+        return  "Error releasing egg at %s: No egg found after \n python setup.py %s %s" % (self.path, self.args, self.dircontents)
 
 
 class HostOut:
@@ -233,7 +234,7 @@ class HostOut:
         config.set('buildout', 'eggs-directory', self.getEggCache())
         config.set('buildout', 'download-cache', self.getDownloadCache())
         config.set('buildout', 'versions', 'versions') #TODO: make this configurable or read from existing
-        #config.set('buildout', 'extends-cache', self.getDownloadCache()+'/extends')
+        config.set('buildout', 'extends-cache', self.getDownloadCache()+'/extends')
         config.set('buildout', 'newest', 'true')
         if self.getParts():
             config.set('buildout', 'parts', ' '.join(self.getParts()))
@@ -246,7 +247,7 @@ class HostOut:
             versions = open(self.options['versionsfile']).read()
             self.parseVersions(versions)
             #need to remove the dev eggs
-            eggs = self.packages.getPackages()
+            eggs = self.packages.release_eggs()
             for line in versions.split('\n'):
                 found = False
                 for package in eggs.keys():
@@ -516,6 +517,8 @@ class Packages:
             if dists:
                 dist = dists[0]
                 res[dist.project_name] = (dist.project_name, dist.version)
+            else:
+                raise Exception("can't find %s", path)
         return res
 
 
@@ -533,10 +536,11 @@ class Packages:
         
         #eggs = self.getDistEggs()
         from setuptools.package_index import interpret_distro_name
-        for path in os.listdir(self.dist_dir):
-            #path = os.path.join(self.dist_dir, path)
-            for dist in interpret_distro_name(self.dist_dir, path, None):
-                    pass
+        cur_dists = list(os.listdir(self.dist_dir))
+        #for path in cur_dists:
+        #    #path = os.path.join(self.dist_dir, path)
+        #    for dist in interpret_distro_name(self.dist_dir, path, None):
+        #            pass
                 
             #egg = pkg_resources.find_distributions(path, only=False)
 
@@ -552,66 +556,76 @@ class Packages:
             files = set([])
             path = os.path.abspath(path)
             os.chdir(path)
-            dist = find_distributions(path)
+            #dist = find_distributions(path)
             #from setuptools.command.sdist import sdist
             #s = sdist(dist)
             #sdist.get_file_list()
             #TODO we need to use the method that sdist uses exactly
             finders = list(pkg_resources.iter_entry_points(group='setuptools.file_finders'))
+            counts = {}
             for entrypoint in finders:
                 plugin = entrypoint.load()
                 found = set(plugin(path))
                 files = files.union(found)
-                print "%s found %d files to hash"%(entrypoint,len(found))
-            if not files:
-                print "Hashing using all files in %s"%path
-                hash = _dir_hash('.', recurse=True)
-            else:
+                counts[entrypoint.name] = len(found)
+            if files:
+                hash_debug = "%s" % (counts)
                 hash = _dir_hash(files, recurse=False)
+            else:
+                hash_debug = "recurse"
+                hash = _dir_hash('.', recurse=True)
+
             ids[hash]=path
+
             os.chdir(cwd)
             egg = None
-            #if len(dist):
-            #    dist = dist[0]
-        #       for file in eggs:
-        #           if file.count(hash):
-        #               egg = os.path.join(self.dist_dir, file)
-        #               break
-            if False and egg:
-                #HACK should get out of zip file
-                version = dist.version
-                #if 'collective.recipe.filestorage' in dist.project_name:
-                version += 'dev' not in dist.version and 'dev' or ''
-                version += hash not in dist.version and '-'+hash or ''
-                self.local_eggs[dist.project_name] = (dist.project_name, version, egg)
-            elif os.path.isdir(path):
-                print "Hostout: Develop egg %s changed. Releasing with hash %s" % (path,hash)
+            if os.path.isdir(path):
+                lines = self.setup(args=[path,'--name', '--fullname', '--version'])
+                try:
+                    name, fullname, version = lines[-3:] #ignore any warnings before
+                except:
+                    import pdb; pdb.set_trace()
+                hash = hash.lstrip('-').replace('_','-').replace('_','-').replace('--','-')
+                tag = 'dev-'+hash if 'dev' not in version else hash
+                fullname = fullname+tag+'.zip'
+                if fullname in cur_dists:
+                    print "Hostout: '%s' unchanged hash=%s(%s). " % (path, hash, hash_debug)
+                    self.local_eggs[name] = (name, version+tag, os.path.join(self.dist_dir,fullname))
+                    continue
+                else:
+                    print "Hostout: '%s' CHANGED. Releasing with hash=%s(%s)" % (path, hash, hash_debug)
                 args=[path,
                                      'clean',
                                      'egg_info',
-                                     '--tag-build','dev_'+hash,
+                                     '--no-svn-revision', '--no-date',
+                                     '--tag-build',
+                                     tag,
                                      'sdist',
                                      '--formats=zip', #fix bizzare gztar truncation on windows
                                      # 'bdist_egg',
                                      '--dist-dir',
                                      '%s'%localdist_dir,
                                       ]
-                self.setup(args = args)
-                dist = find_distributions(path)
-                
-                if not len(dist) or not os.listdir(localdist_dir):
-                    raise DistributionGenerationException(path, args)
-                dist = dist[0]
-                pkg = os.listdir(localdist_dir)[0]
+                lines = self.setup(args = args)
+
+                #dist = find_distributions(path)
+                #if not dist:
+                #    import pdb; pdb.set_trace()
+                if fullname not in os.listdir(localdist_dir):
+                    print '\n'.join(lines)
+                    import pdb; pdb.set_trace()
+                    raise DistributionGenerationException(path, args, os.listdir(localdist_dir))
+                pkg = fullname
                 loc = os.path.join(self.dist_dir, pkg)
                 if os.path.exists(loc):
                     os.remove(loc)
                 shutil.move(os.path.join(localdist_dir, pkg), self.dist_dir)
                 
-                self.local_eggs[dist.project_name] = (dist.project_name, dist.version, loc)
+                self.local_eggs[name] = (name, version+tag, loc)
                 #released[dist.project_name] = dist.version
             else:
 #                shutil.copy(path,localdist_dir)
+                print "Hostout: '%s' already distribution." % (path)
                 self.local_eggs[path] = (None, None, path)
         if released:
             env = package_index.PackageIndex('file://'+pathname2url(localdist_dir))
@@ -629,9 +643,9 @@ class Packages:
                     raise Exception("%(name)s wasn't generated. See errors above" % locals())
 
 
-        if self.local_eggs:
-            specs = ["\t%s = %s"% (p,v) for p,v,e in self.local_eggs.values()]
-            print "Hostout: Eggs to transport:\n%s" % '\n'.join(specs)
+#        if self.local_eggs:
+#            specs = ["\t%s = %s"% (p,v) for p,v,e in self.local_eggs.values()]
+#            print "Hostout: Eggs to transport:\n%s" % '\n'.join(specs)
         return self.local_eggs
 
 
@@ -668,13 +682,18 @@ class Packages:
             #os.spawnl(os.P_WAIT, sys.executable, zc.buildout.easy_install._safe_arg (sys.executable), tsetup,
             #          *[zc.buildout.easy_install._safe_arg(a)
             #            for a in args])
-            args = [zc.buildout.easy_install._safe_arg (sys.executable),
+            # We need '-u' to ensure we get unbuffered python so strange things don't happen
+            args = [zc.buildout.easy_install._safe_arg (sys.executable), '-u',
                     tsetup]+ \
                     [zc.buildout.easy_install._safe_arg(a) for a in args]
-            output = subprocess.call(args,stderr=subprocess.STDOUT)
+            output = subprocess.check_output(args,stderr=subprocess.STDOUT, close_fds=True)
+        except subprocess.CalledProcessError, e:
+            raise
+
         finally:
             os.close(fd)
             os.remove(tsetup)
+        return output.strip().split('\n')
 
 
 def main(cfgfile, args):

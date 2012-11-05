@@ -194,7 +194,7 @@ def uploadeggs():
                     buildout=api.env.hostout.options['buildout-user'],
                     ))
     # Ensure there is no local pinned.cfg so we don't clobber it
-    # Now upload pinned.cfg. 
+    # Now upload pinned.cfg.
     pinned = "[buildout]\ndevelop=\nauto-checkout=\n[versions]\n"+hostout.packages.developVersions()
     tmp = tempfile.NamedTemporaryFile()
     tmp.write(pinned)
