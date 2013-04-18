@@ -144,7 +144,11 @@ class HostOut:
         self.start_cmd = opt.get('post-commands')
         self.stop_cmd = opt.get('pre-commands')
         self.extra_config = opt.get('include')
-        self.extends = [s.strip() for s in opt.get('extends','').split()] + ['collective.hostout']
+        self.extends_only = opt.get('extends-only','').lower() in ['yes','true'] or False
+        if self.extends_only:
+            self.extends = [s.strip() for s in opt.get('extends','').split()]
+        else:
+            self.extends = [s.strip() for s in opt.get('extends','').split()] + ['collective.hostout']
         self.buildout_cfg = [p.strip() for p in opt.get('buildout','buildout.cfg').split() if p.strip()]
         self.versions_part = opt.get('versions','versions')
         self.parts = [p.strip() for p in opt.get('parts','').split() if p.strip()]
