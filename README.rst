@@ -345,7 +345,11 @@ Basic Options
   A public key for the login user.
 
 ``extends``
-  Specifies another part which contains defaults for this hostout.
+  A list of packages with hostout plugin to include.
+
+``extends-only``
+  Disables hostout built-in commands to use only the commands provided
+  by plugins from packages listed in extends.
 
 ``fabfiles``
   Path to fabric files that contain commands which can then be called from
@@ -560,6 +564,27 @@ Once packaged and released others can add your plugin to their hostout e.g.
 cmdline is: bin/hostout host1 [host2...] [all] cmd1 [cmd2...] [arg1 arg2...]
 Valid commands are:
 ...
+   mycommand        : example of command from hostout.myplugin
+
+To disable built-in commands and enable only commands in your plugin
+
+>>> write('buildout.cfg',
+... """
+... [buildout]
+... parts = host1
+...
+... [host1]
+... recipe = collective.hostout
+... extends = hostout.myplugin
+... extends-only = true
+... param1 = blah
+... """ )
+
+>>> print system('bin/buildout')
+
+>>> print system('bin/hostout host1')
+cmdline is: bin/hostout host1 [host2...] [all] cmd1 [cmd2...] [arg1 arg2...]
+Valid commands are:
    mycommand        : example of command from hostout.myplugin
 
 Your fabfile can get access parameters passed in the commandline by defining
