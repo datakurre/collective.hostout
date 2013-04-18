@@ -5,6 +5,8 @@ Release History
 ------------------
 - now compiles python 2.4 on newer ubuntu
 - switched to using collective.buildout.python to compile python
+- add ``extends-only``-option to disable commands in the built-in fabric file
+  [Asko Soukka]
 
 
 1.0a5 (2011-03-21)
