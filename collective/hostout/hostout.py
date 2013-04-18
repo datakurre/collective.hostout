@@ -740,7 +740,7 @@ def main(cfgfile, args):
             else:
                 pos = 'cmds'            
                 # get all cmds
-                allcmds = {'deploy':None}
+                allcmds = {}
                 for host,hostout in hosts:
                     hostout.readsshconfig()
                     allcmds.update(hostout.allcmds())
